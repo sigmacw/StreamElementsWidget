@@ -1,36 +1,52 @@
+// ===== StreamElementsWidget Class =====
+
 class StreamElementsWidget {
+    /**
+     * @param {Object} options - Configuration options.
+     * @param {string} [options.name='goal'] - Storage key name for SE_API store.
+     * @param {Object} [options.config={}] - Initial state override.
+     */
     constructor({ name = 'goal', config = {} }) {
-        this.name = name
+        this.name = name;
+
+        // ===== Initial State Setup =====
         this.state = {
-            ...this.getDefaultState(),
+            ...this.#getDefaultState(),
             ...config
         };
 
+        // ===== Internal Event Listener Registry =====
         this.listeners = {};
+
+        // ===== Event Routing Map =====
         this.eventMap = {
-            "subscriber-latest": this.handleSubscriber.bind(this),
-            "follower-latest": (e) => this.handleFollower.bind(this),
-            "cheer-latest": (e) => this.handleCheer.bind(this),
-            "tip-latest": (e) => this.handleTip.bind(this),
-            "raid-latest": (e) => this.handleRaid.bind(this),
-            "delete-message": (e) => this.emit("delete-message", e),
-            "delete-messages": (e) => this.emit("delete-messages", e),
-            "message": (e) => this.emit("message", e),
+            "subscriber-latest": this.#handleSubscriber.bind(this),
+            "follower-latest": (e) => this.#handleFollower.bind(this),
+            "cheer-latest": (e) => this.#handleCheer.bind(this),
+            "tip-latest": (e) => this.#handleTip.bind(this),
+            "raid-latest": (e) => this.#handleRaid.bind(this),
+            "delete-message": (e) => this.#emit("delete-message", e),
+            "delete-messages": (e) => this.#emit("delete-messages", e),
+            "message": (e) => this.#handleMessage.bind(this),
         };
 
+        // ===== Widget Load Hook =====
         window.addEventListener("onWidgetLoad", (e) => {
             this.data = e.detail.fieldData;
-            this.loadState(e);
+            this.#loadState(e);
         });
 
+        // ===== Event Dispatch Hook =====
         window.addEventListener("onEventReceived", (obj) => {
             const { listener, event } = obj.detail;
 
+            // Handle internal widget button events separately
             if (event.listener === "widget-button") {
-                this.emit("widget-button", event.field);
+                this.#emit("widget-button", event.field);
                 return;
             }
 
+            // Call matching event handler
             const handler = this.eventMap[listener];
             if (handler) {
                 handler(event);
@@ -40,6 +56,25 @@ class StreamElementsWidget {
         });
     }
 
+    // ===== Pub/Sub Utilities =====
+
+    /**
+     * Registers a callback for a given event type.
+     * @param {string} type - Event type.
+     * @param {Function} callback - Callback to call on event.
+     * Allowed event types:
+     * - `follower` : triggers when a viewer follows the channel
+     * - `subscriber-new` : triggers on a new subscriber
+     * - `subscriber-resub` : triggers on a returning subscriber
+     * - `subscriber-gift` : triggers when a viewer gifts a subscription to another viewer
+     * - `subscriber-bulk` : triggers when a viewer gifts multiple subs
+     * - `cheer` : triggers when a viewer sends bits
+     * - `tip` : triggers when a viewer sends a donation through StreamElements
+     * - `raid` : triggers when the channel is raided by another streamer
+     * - `message` : triggers whenever a chat message is sent
+     * - `delete-message` : triggers when a channel moderator deletes a single message
+     * - `delete-messages` : triggers when a channel moderator deletes multiple messages (e.g. user timeout)
+     */
     on(type, callback) {
         if (!this.listeners[type]) {
             this.listeners[type] = [];
@@ -47,93 +82,99 @@ class StreamElementsWidget {
         this.listeners[type].push(callback);
     }
 
-    emit(type, event) {
+    /**
+     * Emits an event to all registered listeners.
+     * @param {string} type - Event type.
+     * @param {Object} event - Event payload.
+     */
+    #emit(type, event) {
         if (!this.listeners[type]) return;
         for (const cb of this.listeners[type]) cb(event);
     }
 
-    /* Event handlers */
+    // ===== Event Handlers =====
 
-    handleFollower(event) {
-        this.setLatestFollower(event.name)
-        this.emit("follower", event)
+    #handleFollower(event) {
+        this.setLatestFollower(event.name);
+        this.#emit("follower", event);
     }
 
-    handleSubscriber(event) {
+    #handleSubscriber(event) {
         if (event.isCommunityGift) return;
 
         if (event.bulkGifted) {
-            this.setLatestSubscriber(event.name, event.amount)
-            this.emit("subscriber-bulk-gift", event);
+            this.setLatestSubscriber(event.name, event.amount);
+            this.#emit("subscriber-bulk-gift", event);
         } else if (event.gifted) {
-            this.setLatestSubscriber(event.sender, event.amount)
-            this.emit("subscriber-gift", event);
+            this.setLatestSubscriber(event.sender, event.amount);
+            this.#emit("subscriber-gift", event);
         } else if (event.amount > 1) {
-            this.setLatestSubscriber(event.name, event.amount)
-            this.emit("subscriber-resub", event);
+            this.setLatestSubscriber(event.name, event.amount);
+            this.#emit("subscriber-resub", event);
         } else {
-            this.setLatestSubscriber(event.name, event.amount)
-            this.emit("subscriber-new", event);
+            this.setLatestSubscriber(event.name, event.amount);
+            this.#emit("subscriber-new", event);
         }
 
-        this.emit("subscriber", event); // catch-all
+        this.#emit("subscriber", event); // General subscriber event
     }
 
-    handleCheer(event) {
-        this.setLatestCheer(event.name, event.amount)
-        this.emit("cheer", event)
+    #handleCheer(event) {
+        this.setLatestCheer(event.name, event.amount);
+        this.#emit("cheer", event);
     }
 
-    handleTip(event) {
-        this.setLatestTip(event.name, event.amount)
-        this.emit("tip", event)
+    #handleTip(event) {
+        this.setLatestTip(event.name, event.amount);
+        this.#emit("tip", event);
     }
 
-    handleRaid(event) {
-        this.setLatestRaid(event.name, event.amount)
-        this.emit("raid", event)
+    #handleRaid(event) {
+        this.setLatestRaid(event.name, event.amount);
+        this.#emit("raid", event);
     }
 
-    handleMessage(e) {
+    // ===== Message Parsing =====
+
+    #handleMessage(e) {
         const data = e.detail.event.data;
-        const role = this.check_role(data);
-        const tier = checkTier(data.tags.badges);
+        const role = this.#check_role(data);
+        const tier = this.#checkTier(data.tags.badges);
         const name = data.displayName;
-        const message = this.attachEmotes(data);
+        const message = this.#attachEmotes(data);
 
         let badges = ``;
-        for (let i = 0; i < data.badges.length; i++) {
-            let badge = data.badges[i];
+        for (let badge of data.badges) {
             badges += `<img alt="" src="${badge.url}" class="badge"> `;
         }
 
-        const emoteOnly = this.isEmote(data);
+        const emoteOnly = this.#isEmote(data);
 
-        this.emit("message", {
+        this.#emit("message", {
             name: name,
             message: message,
             emoteOnly: emoteOnly,
             role: role.role,
             subscriber: role.subscribed,
             ...(role.subscribed && { tier: tier })
-        })
+        });
     }
 
-    /* Widget load */
+    // ===== Load / Save State =====
 
-    loadState(e) {
+    #loadState(e) {
         SE_API.store.get(this.name).then((obj) => {
-            if (obj && !this.isEmpty(obj)) {
+            if (obj && !this.#isEmpty(obj)) {
                 this.state = obj;
             } else {
                 SE_API.store.set(this.name, this.state);
             }
 
-            this.emit("load", e.detail);
-        })
+            this.#emit("load", e.detail);
+        });
     }
 
-    getDefaultState() {
+    #getDefaultState() {
         return {
             total: {
                 followers: 0,
@@ -153,233 +194,249 @@ class StreamElementsWidget {
         };
     }
 
-    isEmpty(obj) {
+    #isEmpty(obj) {
         for (const prop in obj) {
-            if (Object.hasOwn(obj, prop)) {
-                return false;
-            }
+            if (Object.hasOwn(obj, prop)) return false;
         }
-
         return true;
     }
 
-    /* Get data */
+    // ===== Getters =====
 
-    getFollows() {
-        return this.state.total.followers;
-    }
+    /**
+     * Get total follower count 
+     * @returns {number} 
+     */
+    getFollows() { return this.state.total.followers; }
 
-    getSubs() {
-        return this.state.total.subscribers;
-    }
+    /**
+     * Get total subscriber count 
+     * @returns {number} 
+     */
+    getSubs() { return this.state.total.subscribers; }
 
-    getBits() {
-        return this.state.total.bits;
-    }
+    /**
+     * Get total bits count 
+     * @returns {number} 
+     */
+    getBits() { return this.state.total.bits; }
 
-    getTips() {
-        return this.state.total.tips;
-    }
+    /**
+     * Get total tips count (doesn't track currency)
+     * @returns {number} 
+     */
+    getTips() { return this.state.total.tips; }
 
-    getLatestFollower() {
-        return this.state.latest.follower
-    }
+    /** 
+     * Get latest follower's `name`
+     * @returns { { name: string } } 
+     */
+    getLatestFollower() { return this.state.latest.follower; }
 
-    getLatestSubscriber() {
-        return this.state.latest.subscriber
-    }
+    /** 
+     * Get latest subscriber's `name` and `amount`.
+     * `amount` means different things for different subscribers:
+     * - New subscriber (`subcriber-new`)          : always `1`
+     * - Returning subscriber (`subscriber-resub`) : number of `months`
+     * - Individual gift (`subscriber-gift`)       : always `1`
+     * - Bulk gift (`subscriber-bulk`)             : number of `subs gifted`
+     * 
+     * @returns { { name: string, amount: number } } 
+     */
+    getLatestSubscriber() { return this.state.latest.subscriber; }
 
-    getLatestCheer() {
-        return this.state.latest.cheer
-    }
+    /** 
+     * Get latest cheerer's `name` and bits `amount`
+     * @returns { { name: string, amount: number } } 
+     */
+    getLatestCheer() { return this.state.latest.cheer; }
 
-    getLatestTip() {
-        return this.state.latest.tip
-    }
+    /** 
+     * Get latest donator's `name` and tip `amount`
+     * @returns { { name: string, amount: number } } 
+     */
+    getLatestTip() { return this.state.latest.tip; }
 
-    getLatestRaid() {
-        return this.state.latest.raid
-    }
+    /** 
+     * Get latest raider's `name` and viewer `amount`
+     * @returns { { name: string, amount: number } } 
+     */
+    getLatestRaid() { return this.state.latest.raid; }
 
-    /* Set data */
+    // ===== Setters =====
 
+    /**
+     * Sets the total follower count.
+     * @param {number} n
+     */
     setFollows(n) {
         this.state.total.followers = n;
         SE_API.store.set(this.name, this.state);
     }
 
+    /**
+     * Sets the total subscriber count.
+     * @param {number} n
+     */
     setSubs(n) {
         this.state.total.subscribers = n;
         SE_API.store.set(this.name, this.state);
     }
 
+    /**
+     * Sets the total bit count.
+     * @param {number} n
+     */
     setBits(n) {
         this.state.total.bits = n;
         SE_API.store.set(this.name, this.state);
     }
 
+    /**
+     * Sets the total tip amount.
+     * @param {number} n
+     */
     setTips(n) {
         this.state.total.tips = n;
         SE_API.store.set(this.name, this.state);
     }
 
+    /**
+     * Sets the most recent follower.
+     * @param {string} name
+     */
     setLatestFollower(name) {
-        this.state.latest.follower = { name: name }
+        this.state.latest.follower = { name };
     }
 
+    /**
+     * Sets the most recent subscriber and their sub count.
+     * @param {string} name
+     * @param {number} amount
+     */
     setLatestSubscriber(name, amount) {
-        this.state.latest.subscriber = { name: name, amount: amount }
+        this.state.latest.subscriber = { name, amount };
     }
 
+    /**
+     * Sets the most recent cheer and amount.
+     * @param {string} name
+     * @param {number} amount
+     */
     setLatestCheer(name, amount) {
-        this.state.latest.cheer = { name: name, amount: amount }
+        this.state.latest.cheer = { name, amount };
     }
 
+    /**
+     * Sets the most recent tip and amount.
+     * @param {string} name
+     * @param {number} amount
+     */
     setLatestTip(name, amount) {
-        this.state.latest.tip = { name: name, amount: amount }
+        this.state.latest.tip = { name, amount };
     }
 
+    /**
+     * Sets the most recent raid and viewer count.
+     * @param {string} name
+     * @param {number} amount
+     */
     setLatestRaid(name, amount) {
-        this.state.latest.raid = { name: name, amount: amount }
+        this.state.latest.raid = { name, amount };
     }
 
-    /* Modify data */
+    // ===== Modifiers =====
 
+    /**
+     * Increments follower count.
+     * @param {number} n
+     */
     addFollows(n) {
         this.state.total.followers += n;
         SE_API.store.set(this.name, this.state);
     }
 
+    /**
+     * Increments subscriber count.
+     * @param {number} n
+     */
     addSubs(n) {
         this.state.total.subscribers += n;
         SE_API.store.set(this.name, this.state);
     }
 
+    /**
+     * Increments bit total.
+     * @param {number} n
+     */
     addBits(n) {
         this.state.total.bits += n;
         SE_API.store.set(this.name, this.state);
     }
 
+    /**
+     * Increments tip total.
+     * @param {number} n
+     */
     addTips(n) {
         this.state.total.tips += n;
         SE_API.store.set(this.name, this.state);
     }
 
-    /* Helpers */
+    // ===== Helpers =====
 
-    attachEmotes(message) {
-        let text = html_encode(message.text);
+    #attachEmotes(message) {
+        let text = this.#html_encode(message.text);
         let data = message.emotes;
-        if (data[0]) {
-            hasEmotes = "has-emotes"
-        } else {
-            hasEmotes = ""
-        }
-        let isEmoteOnly = isEmote(message)
-        if (typeof message.attachment !== "undefined") {
-            if (typeof message.attachment.media !== "undefined") {
-                if (typeof message.attachment.media.image !== "undefined") {
-                    text = `${message.text}<img src="${message.attachment.media.image.src}">`;
-                }
-            }
-        }
-        return text
-            .replace(
-                /([^\s]*)/gi,
-                function (m, key) {
-                    let result = data.filter(emote => {
-                        return this.html_encode(emote.name) === key
-                    });
-                    if (typeof result[0] !== "undefined") {
-                        let url;
-                        if (isEmoteOnly) {
-                            url = result[0]['urls'][4];
-                        } else {
-                            url = result[0]['urls'][1];
-                        }
-                        if (provider === "twitch") {
-                            return `<img class="emote" src="${url}"/>`;
-                        } else {
-                            if (typeof result[0].coords === "undefined") {
-                                result[0].coords = {
-                                    x: 0,
-                                    y: 0
-                                };
-                            }
-                            let x = parseInt(result[0].coords.x);
-                            let y = parseInt(result[0].coords.y);
+        let isEmoteOnly = this.#isEmote(message);
 
-                            let width = "28px";
-                            let height = "auto";
-                            return `<div class="emote" style="width: ${width}; height:${height}; display: inline-block; background-image: url(${url}); background-position: -${x}px -${y}px;"></div>`;
-                        }
-                    } else return key;
-                }
-            );
-    }
+        if (message?.attachment?.media?.image) {
+            text = `${message.text}<img src="${message.attachment.media.image.src}">`;
+        }
 
-    html_encode(e) {
-        return e.replace(/[<>"^]/g, function (e) {
-            return "&#" + e.charCodeAt(0) + ";";
+        return text.replace(/([^\s]*)/gi, function (m, key) {
+            let result = data.filter(emote => this.#html_encode(emote.name) === key);
+            if (result[0]) {
+                let url = isEmoteOnly ? result[0]['urls'][4] : result[0]['urls'][1];
+                if (provider === "twitch") {
+                    return `<img class="emote" src="${url}"/>`;
+                } else {
+                    let { x = 0, y = 0 } = result[0].coords || {};
+                    return `<div class="emote" style="width: 28px; display: inline-block; background-image: url(${url}); background-position: -${x}px -${y}px;"></div>`;
+                }
+            } else return key;
         });
     }
 
-    check_role(data) {
-        let role;
+    #html_encode(e) {
+        return e.replace(/[<>"^]/g, c => "&#" + c.charCodeAt(0) + ";");
+    }
+
+    #check_role(data) {
         let badges = data.tags.badges;
-        if (badges.includes('broadcaster')) {
-            role = 'broadcaster'
-        } else if (badges.includes('moderator')) {
-            role = 'moderator'
-        } else if (badges.includes('vip')) {
-            role = 'vip'
-        } else if (badges.includes('artist-badge')) {
-            role = 'artist'
-        } else if (badges.includes('subscriber')) {
-            role = 'subscriber'
-        }
+        let role = badges.includes('broadcaster') ? 'broadcaster' :
+                   badges.includes('moderator') ? 'moderator' :
+                   badges.includes('vip') ? 'vip' :
+                   badges.includes('artist-badge') ? 'artist' :
+                   badges.includes('subscriber') ? 'subscriber' : '';
 
-        let isSub = false
-        if (badges.includes('subscriber')) {
-            isSub = true
-        }
-
-        return { role: role, subscribed: isSub }
+        return { role, subscribed: badges.includes('subscriber') };
     }
 
-    checkTier(badge) {
-        let tier;
-        if (/subscriber\/30\d\d/i.test(badge)) {
-            tier = 'tier-3';
-        } else if (/subscriber\/20\d\d/i.test(badge)) {
-            tier = 'tier-2';
-        } else if (/subscriber\/\d/i.test(badge) || /subscriber\/\d\d/i.test(badge)) {
-            tier = 'tier-1';
-        } else {
-            tier = '';
-        }
-        return tier;
+    #checkTier(badge) {
+        if (/subscriber\/30\d\d/i.test(badge)) return 'tier-3';
+        if (/subscriber\/20\d\d/i.test(badge)) return 'tier-2';
+        if (/subscriber\/\d\d?/i.test(badge)) return 'tier-1';
+        return '';
     }
 
-    isEmote(data) {
-        let msg = data.text;
-        msg = msg.replace(/\s\s+/g, ' ');
-        let msg_split = msg.split(" ");
-
-        let emotes = data.emotes;
-
-        let emoteOnly = true;
-        const emote_names = emotes.map((e) => e.name);
-
-        for (let i = 0; i < msg_split.length; i++) {
-            if (!emote_names.includes(msg_split[i])) {
-                emoteOnly = false
-            }
-        }
-        return emoteOnly;
+    #isEmote(data) {
+        const msgWords = data.text.replace(/\s+/g, ' ').split(" ");
+        const emoteNames = data.emotes.map(e => e.name);
+        return msgWords.every(word => emoteNames.includes(word));
     }
-
 }
+
 
 class WidgetTester {
     constructor() {
