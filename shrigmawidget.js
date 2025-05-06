@@ -28,6 +28,7 @@ class StreamElementsWidget {
             "delete-message": (e) => this.#emit("delete-message", e),
             "delete-messages": (e) => this.#emit("delete-messages", e),
             "message": this.#handleMessage.bind(this),
+            "widget-button": (e) => this.#emit("widget-button", e)
         };
 
         // ===== Widget Load Hook =====
