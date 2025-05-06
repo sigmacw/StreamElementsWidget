@@ -8,7 +8,7 @@ class StreamElementsWidget {
      */
     constructor({ name = 'goal', config = {} }) {
         this.name = name;
-
+        this.config = config;
         // ===== Initial State Setup =====
         this.state = {
             ...this.#getDefaultState(),
@@ -80,6 +80,18 @@ class StreamElementsWidget {
             this.listeners[type] = [];
         }
         this.listeners[type].push(callback);
+    }
+
+    /**
+     * Resets the widget to a default state.
+     */
+    reset() {
+        this.state = {
+            ...this.#getDefaultState(),
+            ...config
+        };
+
+        SE_API.store.set(this.name, this.state);
     }
 
     /**
@@ -170,6 +182,9 @@ class StreamElementsWidget {
                 SE_API.store.set(this.name, this.state);
             }
 
+            this.#checkRefresh();
+            SE_API.store.set(this.name, this.state);
+
             this.#emit("load", e.detail);
         });
     }
@@ -189,9 +204,40 @@ class StreamElementsWidget {
                 tip: { name: '', amount: 0 },
                 raid: { name: '', amount: 0 }
             },
-            refreshFrequency: "day",
+            refreshFrequency: "never",
+            lastRefresh: Date.now(),
             currency: '$'
         };
+    }
+
+    #checkRefresh() {
+        const currentDate = Date.now();
+        const diff = (currentDate - this.state.lastRefresh) / (1000 * 60 * 60 * 24);
+
+        const reset = () => {
+            this.state.total.followers = 0;
+            this.state.total.subscribers = 0;
+            this.state.total.bits = 0;
+            this.state.total.tips = 0;
+            this.state.lastRefresh = Date.now();
+        }
+
+        switch (this.state.refreshFrequency) {
+            case "day":
+                if (diff > 1) reset();
+                break
+            case "week":
+                if (diff > 7) reset();
+                break
+            case "month":
+                if (diff > 30) reset();
+                break
+            case "never":
+                break
+            default:
+                break
+
+        }
     }
 
     #isEmpty(obj) {
@@ -415,10 +461,10 @@ class StreamElementsWidget {
     #check_role(data) {
         let badges = data.tags.badges;
         let role = badges.includes('broadcaster') ? 'broadcaster' :
-                   badges.includes('moderator') ? 'moderator' :
-                   badges.includes('vip') ? 'vip' :
-                   badges.includes('artist-badge') ? 'artist' :
-                   badges.includes('subscriber') ? 'subscriber' : '';
+            badges.includes('moderator') ? 'moderator' :
+                badges.includes('vip') ? 'vip' :
+                    badges.includes('artist-badge') ? 'artist' :
+                        badges.includes('subscriber') ? 'subscriber' : '';
 
         return { role, subscribed: badges.includes('subscriber') };
     }
