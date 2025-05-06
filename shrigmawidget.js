@@ -89,7 +89,7 @@ class StreamElementsWidget {
     reset() {
         this.state = {
             ...this.#getDefaultState(),
-            ...config
+            ...this.config
         };
 
         SE_API.store.set(this.name, this.state);
