@@ -21,13 +21,13 @@ class StreamElementsWidget {
         // ===== Event Routing Map =====
         this.eventMap = {
             "subscriber-latest": this.#handleSubscriber.bind(this),
-            "follower-latest": (e) => this.#handleFollower.bind(this),
-            "cheer-latest": (e) => this.#handleCheer.bind(this),
-            "tip-latest": (e) => this.#handleTip.bind(this),
-            "raid-latest": (e) => this.#handleRaid.bind(this),
+            "follower-latest": this.#handleFollower.bind(this),
+            "cheer-latest": this.#handleCheer.bind(this),
+            "tip-latest": this.#handleTip.bind(this),
+            "raid-latest": this.#handleRaid.bind(this),
             "delete-message": (e) => this.#emit("delete-message", e),
             "delete-messages": (e) => this.#emit("delete-messages", e),
-            "message": (e) => this.#handleMessage.bind(this),
+            "message": this.#handleMessage.bind(this),
         };
 
         // ===== Widget Load Hook =====
